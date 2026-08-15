@@ -1,0 +1,5 @@
+TaskFlow Section 2 benchmark (comparison counts)
+dataset_size | insertion_sort(priority) | insertion_sort(title) | binary_search(found index,count) | binary_search(missing count) | linear_search(found count) | linear_search(missing count)
+10 | 24 | 9 | 5,3 | 4 | 6 | 10
+500 | 42082 | 31259 | 169,9 | 9 | 251 | 500
+3000 | 1501499 | 1820009 | 559,11 | 12 | 1501 | 3000
