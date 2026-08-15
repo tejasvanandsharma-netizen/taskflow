@@ -98,6 +98,33 @@ all hidden `pythonw` instances).
 
 > To let *other devices* on your network reach the app, change `host` to
 > `0.0.0.0` in `run_server.py` (and allow port 8000 in Windows Firewall).
+> This is already the default in this repo.
+
+### Public access for anyone (internet)
+
+A Cloudflare tunnel exposes the app to the whole internet with a public
+`https://` URL — no router setup, no account needed.
+
+```powershell
+# start_tunnel.vbs launches cloudflared hidden and appends to tunnel.log
+wscript start_tunnel.vbs
+```
+
+A startup shortcut named "TaskFlow Tunnel" auto-starts it at login (already
+installed on the author's machine). The public URL is printed in
+`tunnel.log`:
+
+```powershell
+Select-String -Path tunnel.log -Pattern "https://[a-z0-9-]+\.trycloudflare\.com"
+```
+
+Example: `https://something-words.trycloudflare.com`. Anyone with that link
+can open the app from any device/browser.
+
+> **Note:** the free quick-tunnel URL **changes every time** the tunnel
+> restarts (reboot). If you need one permanent URL, deploy the app to a
+> free cloud host (e.g. Render) or use a Cloudflare named tunnel with a
+> domain. The local URL `http://127.0.0.1:8000` always works on the PC.
 
 ## Endpoint list
 
