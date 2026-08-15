@@ -20,6 +20,14 @@ class UserRead(UserBase):
 class ProjectBase(BaseModel):
     title: str = Field(min_length=1)
 
+    @field_validator("title")
+    @classmethod
+    def title_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("title must not be blank")
+        return value
+
 
 class ProjectCreate(ProjectBase):
     pass
