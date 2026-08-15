@@ -106,16 +106,16 @@ A Cloudflare tunnel exposes the app to the whole internet with a public
 `https://` URL — no router setup, no account needed.
 
 ```powershell
-# start_tunnel.vbs launches cloudflared hidden and appends to tunnel.log
+# start_tunnel.vbs launches cloudflared hidden and writes tunnel.log / tunnel.err
 wscript start_tunnel.vbs
 ```
 
 A startup shortcut named "TaskFlow Tunnel" auto-starts it at login (already
-installed on the author's machine). The public URL is printed in
-`tunnel.log`:
+installed on the author's machine). The public URL is printed to
+`tunnel.err`:
 
 ```powershell
-Select-String -Path tunnel.log -Pattern "https://[a-z0-9-]+\.trycloudflare\.com"
+Select-String -Path tunnel.err -Pattern "https://[a-z0-9-]+\.trycloudflare\.com"
 ```
 
 Example: `https://something-words.trycloudflare.com`. Anyone with that link
@@ -125,6 +125,26 @@ can open the app from any device/browser.
 > restarts (reboot). If you need one permanent URL, deploy the app to a
 > free cloud host (e.g. Render) or use a Cloudflare named tunnel with a
 > domain. The local URL `http://127.0.0.1:8000` always works on the PC.
+
+### Watchdog — keeps the server and tunnel alive
+
+`watchdog.ps1` is a scheduled task (`TaskFlow Watchdog`, runs every minute)
+that heals the system without killing anything healthy:
+
+- If the API on port 8000 stops responding it starts the server again
+  (it never kills a running server — the duplicate-looking `pythonw`
+  processes are just the venv launcher shim plus the real interpreter).
+- If the tunnel process dies it starts `cloudflared` again.
+- A named mutex guarantees only one watchdog acts at a time, and a
+  `.lastserverstart` timestamp prevents restart churn.
+
+`run_server.py` binds `0.0.0.0:8000` (reachable from phones on the same
+Wi-Fi) and writes logs to `server.log`. Fresh public URL after any tunnel
+restart — read it from `tunnel.err`:
+
+```powershell
+Select-String -Path tunnel.err -Pattern "https://[a-z0-9-]+\.trycloudflare\.com"
+```
 
 ## Endpoint list
 

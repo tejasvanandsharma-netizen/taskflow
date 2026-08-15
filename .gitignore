@@ -13,6 +13,8 @@ venv/
 server.log
 tunnel.log
 tunnel.err
+.lastserverstart
+*.lock
 
 # IDE / OS
 .vscode/
