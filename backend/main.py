@@ -1,3 +1,4 @@
+import os
 import time
 from contextlib import asynccontextmanager
 from typing import Literal
@@ -41,6 +42,13 @@ from .schemas import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    if os.getenv("AUTO_SEED", "0") == "1":
+        try:
+            import seed as _seed
+
+            _seed.seed()
+        except Exception:
+            pass
     yield
 
 
