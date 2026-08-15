@@ -6,57 +6,161 @@
   <title>TaskFlow</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-  <aside class="sidebar">
-    <h1>TaskFlow</h1>
-    <button type="button" id="theme-toggle" class="secondary">Dark Mode</button>
+<body class="dark">
+  <header class="topbar">
+    <div class="brand">TaskFlow</div>
+    <div class="search-wrap">
+      <input type="text" id="search-input" placeholder="Search projects and tasks..." autocomplete="off">
+      <div id="search-results" class="search-results hidden"></div>
+    </div>
+    <div class="top-actions">
+      <button type="button" id="theme-toggle" class="icon-btn" aria-label="toggle theme">&#9789;</button>
+      <div class="avatar-wrap">
+        <button type="button" id="avatar-btn" class="avatar" aria-label="account menu"></button>
+        <div id="avatar-menu" class="avatar-menu hidden">
+          <div id="avatar-name" class="avatar-line"></div>
+          <div id="avatar-id" class="avatar-line muted"></div>
+          <label for="avatar-gender">Gender</label>
+          <select id="avatar-gender">
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </select>
+          <button type="button" id="logout-btn" class="danger small">Log out</button>
+        </div>
+      </div>
+    </div>
+  </header>
 
-    <section class="panel">
-      <h2>Quick Add</h2>
-      <form id="quick-add-form" novalidate>
-        <input type="text" id="quick-add-input"
-               placeholder="e.g. Finish report tomorrow urgent">
-        <button type="submit" class="primary">Add</button>
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <section class="panel">
+        <h2>Quick Add</h2>
+        <form id="quick-add-form" novalidate>
+          <input type="text" id="quick-add-input"
+                 placeholder="e.g. Finish report tomorrow urgent">
+          <button type="submit" class="primary">Add</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2 id="form-heading">New Task</h2>
+        <form id="task-form" novalidate>
+          <label for="task-title">Title</label>
+          <input type="text" id="task-title" placeholder="Task title">
+          <p id="title-error" class="error hidden">Title is required.</p>
+
+          <label for="task-priority">Priority</label>
+          <select id="task-priority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+
+          <label for="task-due-date">Due date</label>
+          <input type="text" id="task-due-date" placeholder="e.g. tomorrow">
+
+          <label for="task-content">Details</label>
+          <textarea id="task-content" rows="3" placeholder="Extra details about this task"></textarea>
+
+          <button type="submit" class="primary" id="task-submit">Add Task</button>
+          <button type="button" id="task-cancel" class="secondary hidden">Cancel Edit</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Project</h2>
+        <label for="project-select">Switch project</label>
+        <select id="project-select"></select>
+
+        <label for="project-title">Project name</label>
+        <input type="text" id="project-title" placeholder="e.g. Dark Store A">
+
+        <label for="project-content">Project details</label>
+        <textarea id="project-content" rows="3" placeholder="What is this project about?"></textarea>
+
+        <button type="button" id="project-add-btn" class="secondary">Add Project</button>
+        <button type="button" id="sort-priority-btn" class="secondary">Sort by Priority</button>
+      </section>
+    </aside>
+
+    <main class="content">
+      <div class="content-head">
+        <div>
+          <h2 id="project-heading">Tasks</h2>
+          <p id="project-desc" class="project-desc muted"></p>
+        </div>
+        <label class="filter-wrap">Filter
+          <select id="filter-priority">
+            <option value="all">All priorities</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+      </div>
+      <p id="status" class="status" role="status"></p>
+      <ul id="task-list" class="task-list"></ul>
+    </main>
+  </div>
+
+  <section id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <h1>TaskFlow</h1>
+      <p class="auth-tagline">Organise projects and tasks together.</p>
+      <div class="auth-tabs">
+        <button type="button" id="tab-login" class="auth-tab active">Log In</button>
+        <button type="button" id="tab-signup" class="auth-tab">Sign Up</button>
+      </div>
+
+      <form id="login-form" novalidate>
+        <label for="login-identifier">Email, phone, username or user id</label>
+        <input type="text" id="login-identifier" autocomplete="username" placeholder="e.g. demo@taskflow.io or demo or 9876543210">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" autocomplete="current-password">
+        <p id="login-error" class="error hidden"></p>
+        <button type="submit" class="primary">Log In</button>
       </form>
-    </section>
 
-    <section class="panel">
-      <h2 id="form-heading">New Task</h2>
-      <form id="task-form" novalidate>
-        <label for="task-title">Title</label>
-        <input type="text" id="task-title" placeholder="Task title">
-        <p id="title-error" class="error hidden">Title is required.</p>
-
-        <label for="task-priority">Priority</label>
-        <select id="task-priority">
-          <option value="low">Low</option>
-          <option value="medium" selected>Medium</option>
-          <option value="high">High</option>
+      <form id="signup-form" class="hidden" novalidate>
+        <label for="signup-name">Name</label>
+        <input type="text" id="signup-name" placeholder="Your name">
+        <label for="signup-identifier">Email, phone or username</label>
+        <input type="text" id="signup-identifier" autocomplete="username" placeholder="e.g. demo@taskflow.io or 9876543210 or demo">
+        <label for="signup-password">Password</label>
+        <input type="password" id="signup-password" autocomplete="new-password">
+        <label for="signup-gender">Gender</label>
+        <select id="signup-gender">
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+          <option value="other">Other</option>
         </select>
-
-        <label for="task-due-date">Due date</label>
-        <input type="text" id="task-due-date" placeholder="e.g. tomorrow">
-
-        <button type="submit" class="primary" id="task-submit">Add Task</button>
-        <button type="button" id="task-cancel" class="secondary hidden">Cancel Edit</button>
+        <p id="signup-error" class="error hidden"></p>
+        <button type="submit" class="primary">Create Account</button>
       </form>
-    </section>
 
-    <section class="panel">
-      <h2>Project</h2>
-      <select id="project-select"></select>
-      <label for="project-title">Add a project</label>
-      <input type="text" id="project-title" placeholder="e.g. Dark Store A">
-      <button type="button" id="project-add-btn" class="secondary">Add Project</button>
-      <button type="button" id="sort-priority-btn" class="secondary">Sort by Priority</button>
-    </section>
-  </aside>
+      <div class="auth-divider"><span>or continue with</span></div>
+      <div class="oauth-buttons">
+        <button type="button" id="google-btn" class="oauth google">Google</button>
+        <button type="button" id="github-btn" class="oauth github">GitHub</button>
+      </div>
+    </div>
+  </section>
 
-  <main class="content">
-    <h2 id="project-heading">Tasks</h2>
-    <p id="status" class="status" role="status"></p>
-    <ul id="task-list" class="task-list"></ul>
-  </main>
+  <div id="oauth-modal" class="modal hidden">
+    <div class="modal-card">
+      <h3 id="oauth-title">Sign in with Google</h3>
+      <p class="muted">Demo OAuth &mdash; pick the account to connect. Real OAuth activates automatically when the server has Google/GitHub client credentials.</p>
+      <label for="oauth-email">Email</label>
+      <input type="text" id="oauth-email" autocomplete="off">
+      <label for="oauth-name">Name</label>
+      <input type="text" id="oauth-name" autocomplete="off">
+      <div class="modal-actions">
+        <button type="button" id="oauth-cancel" class="secondary">Cancel</button>
+        <button type="button" id="oauth-confirm" class="primary">Continue</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     (function () {
@@ -64,31 +168,68 @@
 
       var WEIGHTS = { low: 1, medium: 2, high: 3 };
       var DEFAULT_TITLE = 'Untitled task';
+      var AVATARS = { male: '\u{1F466}', female: '\u{1F467}', other: '\u{1F9D1}' };
 
+      var token = localStorage.getItem('tf_token');
+      var currentUser = null;
+      try {
+        currentUser = JSON.parse(localStorage.getItem('tf_user') || 'null');
+      } catch (err) { currentUser = null; }
+
+      var projects = [];
+      var allTasks = [];
+      var currentTasks = [];
+      var selectedProjectId = null;
+      var editingTaskId = null;
+      var filterPriority = 'all';
+      var oauthProvider = 'google';
+
+      var app = document.getElementById('app');
+      var authScreen = document.getElementById('auth-screen');
+      var searchInput = document.getElementById('search-input');
+      var searchResults = document.getElementById('search-results');
+      var avatarBtn = document.getElementById('avatar-btn');
+      var avatarMenu = document.getElementById('avatar-menu');
+      var avatarName = document.getElementById('avatar-name');
+      var avatarId = document.getElementById('avatar-id');
+      var avatarGender = document.getElementById('avatar-gender');
+      var logoutBtn = document.getElementById('logout-btn');
+      var themeToggle = document.getElementById('theme-toggle');
       var projectSelect = document.getElementById('project-select');
       var projectHeading = document.getElementById('project-heading');
+      var projectDesc = document.getElementById('project-desc');
       var taskList = document.getElementById('task-list');
       var statusEl = document.getElementById('status');
-
+      var filterSelect = document.getElementById('filter-priority');
       var quickAddForm = document.getElementById('quick-add-form');
       var quickAddInput = document.getElementById('quick-add-input');
-
       var taskForm = document.getElementById('task-form');
       var taskTitle = document.getElementById('task-title');
       var taskPriority = document.getElementById('task-priority');
       var taskDueDate = document.getElementById('task-due-date');
+      var taskContent = document.getElementById('task-content');
       var titleError = document.getElementById('title-error');
       var taskSubmit = document.getElementById('task-submit');
       var taskCancel = document.getElementById('task-cancel');
       var formHeading = document.getElementById('form-heading');
-
       var sortBtn = document.getElementById('sort-priority-btn');
-      var themeToggle = document.getElementById('theme-toggle');
-      var projectTitle = document.getElementById('project-title');
+      var projectTitleInput = document.getElementById('project-title');
+      var projectContentInput = document.getElementById('project-content');
       var projectAddBtn = document.getElementById('project-add-btn');
-
-      var currentTasks = [];
-      var editingTaskId = null;
+      var loginForm = document.getElementById('login-form');
+      var signupForm = document.getElementById('signup-form');
+      var tabLogin = document.getElementById('tab-login');
+      var tabSignup = document.getElementById('tab-signup');
+      var loginError = document.getElementById('login-error');
+      var signupError = document.getElementById('signup-error');
+      var googleBtn = document.getElementById('google-btn');
+      var githubBtn = document.getElementById('github-btn');
+      var oauthModal = document.getElementById('oauth-modal');
+      var oauthTitle = document.getElementById('oauth-title');
+      var oauthEmail = document.getElementById('oauth-email');
+      var oauthName = document.getElementById('oauth-name');
+      var oauthCancel = document.getElementById('oauth-cancel');
+      var oauthConfirm = document.getElementById('oauth-confirm');
 
       function setStatus(message) {
         statusEl.textContent = message;
@@ -115,22 +256,338 @@
       function saveCache(projectId, tasks) {
         try {
           localStorage.setItem(cacheKey(projectId), JSON.stringify(tasks));
+        } catch (err) { /* storage unavailable or full; live fetch still works */ }
+      }
+
+      function showError(el, message) {
+        el.textContent = message;
+        el.classList.remove('hidden');
+      }
+
+      function clearError(el) {
+        el.textContent = '';
+        el.classList.add('hidden');
+      }
+
+      async function api(path, options) {
+        options = options || {};
+        options.headers = options.headers || {};
+        if (token) {
+          options.headers.Authorization = 'Bearer ' + token;
+        }
+        var res = await fetch(path, options);
+        if (res.status === 401) {
+          token = null;
+          currentUser = null;
+          localStorage.removeItem('tf_token');
+          localStorage.removeItem('tf_user');
+          showAuth();
+        }
+        if (!res.ok) {
+          var detail = '';
+          try {
+            var body = await res.json();
+            detail = body.detail || body.message || '';
+          } catch (err) { detail = await res.text(); }
+          throw new Error('HTTP ' + res.status + (detail ? ': ' + detail : ''));
+        }
+        return res;
+      }
+
+      function setAvatar(user) {
+        var gender = user && user.gender ? user.gender : 'other';
+        avatarBtn.textContent = AVATARS[gender] || AVATARS.other;
+      }
+
+      function renderAvatarMenu(user) {
+        avatarName.textContent = user.display_name || user.username || user.email;
+        avatarId.textContent = user.email || (user.phone || user.username);
+        avatarGender.value = user.gender || 'other';
+      }
+
+      function enterApp(user) {
+        currentUser = user;
+        token = localStorage.getItem('tf_token');
+        setAvatar(user);
+        renderAvatarMenu(user);
+        authScreen.classList.add('hidden');
+        app.classList.remove('hidden');
+        resetForm();
+        loadProjects();
+      }
+
+      function showAuth() {
+        app.classList.add('hidden');
+        authScreen.classList.remove('hidden');
+      }
+
+      // ---------------- Auth flows ----------------
+
+      function switchTab(which) {
+        var login = which === 'login';
+        tabLogin.classList.toggle('active', login);
+        tabSignup.classList.toggle('active', !login);
+        loginForm.classList.toggle('hidden', !login);
+        signupForm.classList.toggle('hidden', login);
+        clearError(loginError);
+        clearError(signupError);
+      }
+
+      tabLogin.addEventListener('click', function () { switchTab('login'); });
+      tabSignup.addEventListener('click', function () { switchTab('signup'); });
+
+      function afterAuth(res) {
+        var body = null;
+        try { body = JSON.parse(res); } catch (err) { throw new Error('bad server response'); }
+        token = body.token;
+        currentUser = body.user;
+        localStorage.setItem('tf_token', token);
+        localStorage.setItem('tf_user', JSON.stringify(currentUser));
+        enterApp(currentUser);
+      }
+
+      loginForm.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        var identifier = document.getElementById('login-identifier').value.trim();
+        var password = document.getElementById('login-password').value;
+        if (!identifier || !password) {
+          showError(loginError, 'Enter both identifier and password.');
+          return;
+        }
+        clearError(loginError);
+        try {
+          var res = await fetch('/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier: identifier, password: password })
+          });
+          if (!res.ok) {
+            var errBody = await res.json();
+            throw new Error(errBody.detail || 'Login failed');
+          }
+          await afterAuth(await res.text());
         } catch (err) {
-          // storage unavailable or full; live fetch still works
+          showError(loginError, err.message);
+        }
+      });
+
+      signupForm.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        var displayName = document.getElementById('signup-name').value.trim();
+        var identifier = document.getElementById('signup-identifier').value.trim();
+        var password = document.getElementById('signup-password').value;
+        var gender = document.getElementById('signup-gender').value;
+        if (!identifier || !password) {
+          showError(signupError, 'Enter an email, phone or username, and a password.');
+          return;
+        }
+        clearError(signupError);
+        var payload = {
+          password: password,
+          display_name: displayName || null,
+          gender: gender
+        };
+        if (identifier.indexOf('@') !== -1) {
+          payload.email = identifier;
+        } else if (/^\+?[0-9][0-9 \-]{6,}$/.test(identifier) && /[0-9]/.test(identifier)) {
+          payload.phone = identifier;
+        } else {
+          payload.username = identifier;
+        }
+        try {
+          var res = await fetch('/auth/signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) {
+            var errBody = await res.json();
+            throw new Error(errBody.detail || 'Sign up failed');
+          }
+          await afterAuth(await res.text());
+        } catch (err) {
+          showError(signupError, err.message);
+        }
+      });
+
+      function openOAuth(provider) {
+        oauthProvider = provider;
+        oauthTitle.textContent = provider === 'google' ? 'Sign in with Google' : 'Sign in with GitHub';
+        oauthEmail.value = provider === 'google' ? 'demo.google@taskflow.io' : 'demo.github@taskflow.io';
+        oauthName.value = provider === 'google' ? 'Google User' : 'GitHub User';
+        oauthModal.classList.remove('hidden');
+        oauthEmail.focus();
+      }
+
+      googleBtn.addEventListener('click', function () { openOAuth('google'); });
+      githubBtn.addEventListener('click', function () { openOAuth('github'); });
+      oauthCancel.addEventListener('click', function () { oauthModal.classList.add('hidden'); });
+
+      oauthConfirm.addEventListener('click', async function () {
+        var email = oauthEmail.value.trim();
+        var name = oauthName.value.trim();
+        if (!email) return;
+        oauthModal.classList.add('hidden');
+        try {
+          var res = await fetch('/auth/' + oauthProvider, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider: oauthProvider, email: email, name: name || null })
+          });
+          if (!res.ok) {
+            var errBody = await res.json();
+            throw new Error(errBody.detail || 'OAuth failed');
+          }
+          await afterAuth(await res.text());
+        } catch (err) {
+          showError(loginError, err.message);
+          switchTab('login');
+        }
+      });
+
+      logoutBtn.addEventListener('click', function () {
+        token = null;
+        currentUser = null;
+        localStorage.removeItem('tf_token');
+        localStorage.removeItem('tf_user');
+        avatarMenu.classList.add('hidden');
+        showAuth();
+      });
+
+      avatarBtn.addEventListener('click', function () {
+        avatarMenu.classList.toggle('hidden');
+      });
+
+      document.addEventListener('click', function (event) {
+        if (!avatarMenu.classList.contains('hidden') &&
+            !avatarBtn.contains(event.target) &&
+            !avatarMenu.contains(event.target)) {
+          avatarMenu.classList.add('hidden');
+        }
+        if (!searchResults.classList.contains('hidden') &&
+            !searchInput.contains(event.target) &&
+            !searchResults.contains(event.target)) {
+          searchResults.classList.add('hidden');
+        }
+      });
+
+      avatarGender.addEventListener('change', async function () {
+        var gender = avatarGender.value;
+        try {
+          var res = await api('/auth/me', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gender: gender })
+          });
+          currentUser = await res.json();
+          localStorage.setItem('tf_user', JSON.stringify(currentUser));
+          setAvatar(currentUser);
+          renderAvatarMenu(currentUser);
+          setStatus('Gender updated.');
+        } catch (err) {
+          setStatus('Could not update gender: ' + err.message);
+        }
+      });
+
+      // ---------------- Theme ----------------
+
+      function applyTheme(theme) {
+        document.body.classList.toggle('dark', theme === 'dark');
+        themeToggle.textContent = theme === 'dark' ? '\u260C' : '\u263E';
+      }
+
+      applyTheme(localStorage.getItem('theme') || 'dark');
+
+      themeToggle.addEventListener('click', function () {
+        var next = document.body.classList.contains('dark') ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        applyTheme(next);
+      });
+
+      // ---------------- Projects & tasks ----------------
+
+      async function loadProjects() {
+        try {
+          var res = await api('/projects');
+          projects = await res.json();
+          projectSelect.textContent = '';
+          projects.forEach(function (project) {
+            var opt = document.createElement('option');
+            opt.value = project.id;
+            opt.textContent = project.title;
+            projectSelect.appendChild(opt);
+          });
+          if (projects.length) {
+            projectSelect.value = projects[0].id;
+            await loadTasks();
+          } else {
+            projectHeading.textContent = 'Tasks';
+            projectDesc.textContent = '';
+            renderTasks([]);
+            setStatus('No projects yet. Add one from the sidebar.');
+          }
+          refreshSearchIndex();
+        } catch (err) {
+          setStatus('Error loading projects: ' + err.message);
         }
       }
 
-      function showTitleError() {
-        titleError.classList.remove('hidden');
+      function showProjectDescription() {
+        var project = projects.filter(function (p) { return p.id === Number(projectSelect.value); })[0];
+        projectDesc.textContent = (project && project.content) ? project.content : '';
       }
 
-      function clearTitleError() {
-        titleError.classList.add('hidden');
+      async function loadTasks() {
+        var projectId = projectSelect.value;
+        if (!projectId) return;
+        selectedProjectId = Number(projectId);
+        projectHeading.textContent = projectSelect.selectedOptions[0]
+          ? projectSelect.selectedOptions[0].textContent + ' tasks'
+          : 'Tasks';
+        showProjectDescription();
+
+        try {
+          var cached = localStorage.getItem(cacheKey(projectId));
+          if (cached) {
+            renderTasks(JSON.parse(cached));
+            setStatus('Showing cached tasks \u2014 refreshing\u2026');
+          }
+        } catch (err) { /* corrupt cache; ignore and refetch */ }
+
+        try {
+          var res = await api('/projects/' + projectId + '/tasks');
+          var tasks = await res.json();
+          renderTasks(tasks);
+          setStatus('Loaded ' + tasks.length + ' task' + (tasks.length === 1 ? '' : 's'));
+        } catch (err) {
+          setStatus('Error loading tasks: ' + err.message);
+        }
+      }
+
+      function renderTasks(tasks) {
+        currentTasks = tasks;
+        taskList.textContent = '';
+        var visible = tasks;
+        if (filterPriority !== 'all') {
+          visible = tasks.filter(function (task) { return task.priority === filterPriority; });
+        }
+        if (!visible.length) {
+          var li = document.createElement('li');
+          li.className = 'task-item empty';
+          li.textContent = 'No tasks yet. Add one from the sidebar.';
+          taskList.appendChild(li);
+        } else {
+          visible.forEach(function (task) {
+            taskList.appendChild(buildTaskItem(task));
+          });
+        }
+        saveCache(projectSelect.value, tasks);
       }
 
       function buildTaskItem(task) {
         var li = document.createElement('li');
         li.className = 'task-item priority-' + task.priority;
+        li.dataset.taskId = task.id;
 
         var info = document.createElement('div');
         info.className = 'task-info';
@@ -146,6 +603,13 @@
 
         info.appendChild(title);
         info.appendChild(meta);
+
+        if (task.content) {
+          var detail = document.createElement('p');
+          detail.className = 'task-detail';
+          detail.textContent = task.content;
+          info.appendChild(detail);
+        }
 
         var actions = document.createElement('div');
         actions.className = 'task-actions';
@@ -170,31 +634,16 @@
         return li;
       }
 
-      function renderTasks(tasks) {
-        currentTasks = tasks;
-        taskList.textContent = '';
-        if (!tasks.length) {
-          var li = document.createElement('li');
-          li.className = 'task-item empty';
-          li.textContent = 'No tasks yet. Add one from the sidebar.';
-          taskList.appendChild(li);
-        } else {
-          tasks.forEach(function (task) {
-            taskList.appendChild(buildTaskItem(task));
-          });
-        }
-        saveCache(projectSelect.value, tasks);
-      }
-
       function startEdit(task) {
         editingTaskId = task.id;
         taskTitle.value = task.title;
         taskPriority.value = task.priority;
         taskDueDate.value = task.due_date || '';
+        taskContent.value = task.content || '';
         formHeading.textContent = 'Edit Task';
         taskSubmit.textContent = 'Save Changes';
         taskCancel.classList.remove('hidden');
-        clearTitleError();
+        clearError(titleError);
         window.scrollTo(0, 0);
       }
 
@@ -203,96 +652,40 @@
         taskTitle.value = '';
         taskPriority.value = 'medium';
         taskDueDate.value = '';
+        taskContent.value = '';
         formHeading.textContent = 'New Task';
         taskSubmit.textContent = 'Add Task';
         taskCancel.classList.add('hidden');
-        clearTitleError();
-      }
-
-      async function requestJson(url, options) {
-        var res = await fetch(url, options);
-        if (!res.ok) {
-          throw new Error('HTTP ' + res.status + ': ' + (await res.text()));
-        }
-        return res;
-      }
-
-      async function loadProjects() {
-        try {
-          var res = await requestJson('/projects');
-          var projects = await res.json();
-          projectSelect.textContent = '';
-          projects.forEach(function (project) {
-            var opt = document.createElement('option');
-            opt.value = project.id;
-            opt.textContent = project.title;
-            projectSelect.appendChild(opt);
-          });
-          if (projects.length) {
-            projectSelect.value = projects[0].id;
-            await loadTasks();
-          } else {
-            projectHeading.textContent = 'Tasks';
-            renderTasks([]);
-            setStatus('No projects yet. Create one via the API.');
-          }
-        } catch (err) {
-          setStatus('Error loading projects: ' + err.message);
-        }
-      }
-
-      async function loadTasks() {
-        var projectId = projectSelect.value;
-        if (!projectId) return;
-        projectHeading.textContent = projectSelect.selectedOptions[0]
-          ? projectSelect.selectedOptions[0].textContent + ' tasks'
-          : 'Tasks';
-
-        try {
-          var cached = localStorage.getItem(cacheKey(projectId));
-          if (cached) {
-            renderTasks(JSON.parse(cached));
-            setStatus('Showing cached tasks \u2014 refreshing\u2026');
-          }
-        } catch (err) {
-          // corrupt cache; ignore and refetch below
-        }
-
-        try {
-          var res = await requestJson('/projects/' + projectId + '/tasks');
-          var tasks = await res.json();
-          renderTasks(tasks);
-          setStatus('Loaded ' + tasks.length + ' task' + (tasks.length === 1 ? '' : 's'));
-        } catch (err) {
-          setStatus('Error loading tasks: ' + err.message);
-        }
+        clearError(titleError);
       }
 
       taskForm.addEventListener('submit', async function (event) {
         event.preventDefault();
         var title = taskTitle.value.trim();
         if (!title) {
-          showTitleError();
+          titleError.classList.remove('hidden');
           taskTitle.focus();
           return;
         }
-        clearTitleError();
+        titleError.classList.add('hidden');
         var payload = {
           title: title,
           priority: taskPriority.value,
-          due_date: taskDueDate.value.trim() || null
+          due_date: taskDueDate.value.trim() || null,
+          content: taskContent.value.trim() || null
         };
         try {
           var url = editingTaskId
             ? '/tasks/' + editingTaskId
             : '/projects/' + projectSelect.value + '/tasks';
-          await requestJson(url, {
+          await api(url, {
             method: editingTaskId ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
           resetForm();
           await loadTasks();
+          refreshSearchIndex();
         } catch (err) {
           setStatus('Save failed: ' + err.message);
         }
@@ -300,7 +693,7 @@
 
       taskTitle.addEventListener('input', function () {
         if (taskTitle.value.trim()) {
-          clearTitleError();
+          titleError.classList.add('hidden');
         }
       });
 
@@ -309,9 +702,10 @@
       async function deleteTask(task) {
         if (!window.confirm('Delete task "' + task.title + '"?')) return;
         try {
-          await requestJson('/tasks/' + task.id, { method: 'DELETE' });
+          await api('/tasks/' + task.id, { method: 'DELETE' });
           if (editingTaskId === task.id) resetForm();
           await loadTasks();
+          refreshSearchIndex();
         } catch (err) {
           setStatus('Delete failed: ' + err.message);
         }
@@ -322,7 +716,7 @@
         var description = quickAddInput.value.trim();
         if (!description) return;
         try {
-          await requestJson('/tasks/quick-add', {
+          await api('/tasks/quick-add', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -332,6 +726,7 @@
           });
           quickAddInput.value = '';
           await loadTasks();
+          refreshSearchIndex();
         } catch (err) {
           setStatus('Quick add failed: ' + err.message);
         }
@@ -339,6 +734,11 @@
 
       projectSelect.addEventListener('change', function () {
         loadTasks();
+      });
+
+      filterSelect.addEventListener('change', function () {
+        filterPriority = filterSelect.value;
+        renderTasks(currentTasks);
       });
 
       sortBtn.addEventListener('click', function () {
@@ -350,34 +750,25 @@
         setStatus('Sorted by priority (high first)');
       });
 
-      function applyTheme(theme) {
-        document.body.classList.toggle('dark', theme === 'dark');
-        themeToggle.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
-      }
-
-      applyTheme(localStorage.getItem('theme') || 'light');
-
-      themeToggle.addEventListener('click', function () {
-        var next = document.body.classList.contains('dark') ? 'light' : 'dark';
-        localStorage.setItem('theme', next);
-        applyTheme(next);
-      });
-
       async function addProject() {
-        var title = projectTitle.value.trim();
+        var title = projectTitleInput.value.trim();
         if (!title) {
           setStatus('Enter a project name first.');
-          projectTitle.focus();
+          projectTitleInput.focus();
           return;
         }
         try {
-          var res = await requestJson('/projects', {
+          var res = await api('/projects', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: title })
+            body: JSON.stringify({
+              title: title,
+              content: projectContentInput.value.trim() || null
+            })
           });
           var created = await res.json();
-          projectTitle.value = '';
+          projectTitleInput.value = '';
+          projectContentInput.value = '';
           await loadProjects();
           projectSelect.value = String(created.id);
           await loadTasks();
@@ -388,15 +779,145 @@
       }
 
       projectAddBtn.addEventListener('click', addProject);
-      projectTitle.addEventListener('keydown', function (event) {
+      projectTitleInput.addEventListener('keydown', function (event) {
         if (event.key === 'Enter') {
           event.preventDefault();
           addProject();
         }
       });
 
+      // ---------------- Search at top ----------------
+
+      function refreshSearchIndex() {
+        allTasks = [];
+        projects.forEach(function (project) {
+          allTasks = allTasks.concat(project.__tasks || []);
+        });
+      }
+
+      async function loadAllTasks() {
+        try {
+          var res = await api('/tasks');
+          var tasks = await res.json();
+          var byProject = {};
+          tasks.forEach(function (task) {
+            (byProject[task.project_id] = byProject[task.project_id] || []).push(task);
+          });
+          projects.forEach(function (project) {
+            project.__tasks = byProject[project.id] || [];
+          });
+          refreshSearchIndex();
+        } catch (err) { /* search stays empty if load fails */ }
+      }
+
+      function projectTitleFor(projectId) {
+        var p = projects.filter(function (pr) { return pr.id === projectId; })[0];
+        return p ? p.title : '';
+      }
+
+      function matches(query, record) {
+        var q = query.toLowerCase();
+        var hay = (record.title + ' ' + (record.content || '')).toLowerCase();
+        return hay.indexOf(q) !== -1;
+      }
+
+      searchInput.addEventListener('input', function () {
+        var query = searchInput.value.trim();
+        searchResults.textContent = '';
+        if (!query) {
+          searchResults.classList.add('hidden');
+          return;
+        }
+        var projectHits = projects.filter(function (p) { return matches(query, p); });
+        var taskHits = allTasks.filter(function (t) { return matches(query, t); });
+
+        projectHits.slice(0, 4).forEach(function (project) {
+          searchResults.appendChild(buildSearchRow('Project', project.title, project.content, function () {
+            projectSelect.value = String(project.id);
+            loadTasks();
+            hideSearch();
+          }));
+        });
+        taskHits.slice(0, 6).forEach(function (task) {
+          var projectTitle = projectTitleFor(task.project_id);
+          searchResults.appendChild(buildSearchRow('Task', task.title, projectTitle, function () {
+            projectSelect.value = String(task.project_id);
+            loadTasks().then(function () {
+              highlightTask(task.id);
+            });
+            hideSearch();
+          }));
+        });
+
+        if (!projectHits.length && !taskHits.length) {
+          var empty = document.createElement('div');
+          empty.className = 'search-empty';
+          empty.textContent = 'No matches for "' + query + '"';
+          searchResults.appendChild(empty);
+        }
+        searchResults.classList.remove('hidden');
+      });
+
+      function buildSearchRow(kind, title, subtitle, onClick) {
+        var row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'search-row';
+        var line1 = document.createElement('span');
+        line1.className = 'search-kind';
+        line1.textContent = kind;
+        var line2 = document.createElement('span');
+        line2.className = 'search-title';
+        line2.textContent = title;
+        row.appendChild(line1);
+        row.appendChild(line2);
+        if (subtitle) {
+          var line3 = document.createElement('span');
+          line3.className = 'search-subtitle';
+          line3.textContent = subtitle;
+          row.appendChild(line3);
+        }
+        row.addEventListener('click', onClick);
+        return row;
+      }
+
+      function hideSearch() {
+        searchInput.value = '';
+        searchResults.textContent = '';
+        searchResults.classList.add('hidden');
+      }
+
+      function highlightTask(taskId) {
+        var item = taskList.querySelector('[data-task-id="' + taskId + '"]');
+        if (item) {
+          item.classList.add('highlight');
+          item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(function () { item.classList.remove('highlight'); }, 2000);
+        }
+      }
+
+      // ---------------- Boot ----------------
+
+      async function boot() {
+        if (!token) {
+          showAuth();
+          return;
+        }
+        try {
+          var res = await api('/auth/me');
+          var user = await res.json();
+          enterApp(user);
+        } catch (err) {
+          token = null;
+          currentUser = null;
+          localStorage.removeItem('tf_token');
+          localStorage.removeItem('tf_user');
+          showAuth();
+        }
+      }
+
       resetForm();
-      loadProjects();
+      loadAllTasks();
+      boot();
     })();
   </script>
 </body>
