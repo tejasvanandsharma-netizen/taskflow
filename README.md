@@ -65,10 +65,12 @@ python check_algorithms.py   # Section 2 PASS/FAIL checks
 python benchmark.py          # Section 2 comparison-count benchmarks
 ```
 
-### Seed demo data
+### Seed sample content
 
-Creates `demo@taskflow.io` (password `demo123`), the project `Demo Project`,
-and a sample task. Safe to run repeatedly — it never duplicates:
+Creates a private sample project (`Sample Project`) with three sample tasks.
+Every new **guest** session gets its own copy of this content; registered
+accounts start empty so nobody can see anyone else's data. Safe to run
+repeatedly — it never duplicates:
 
 ```bash
 python seed.py

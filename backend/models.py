@@ -28,7 +28,10 @@ class Project(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
-    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    owner_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), index=True, nullable=True
+    )
+    owner_guest_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
 
     owner: Mapped["User"] = relationship(back_populates="projects")
     tasks: Mapped[list["Task"]] = relationship(

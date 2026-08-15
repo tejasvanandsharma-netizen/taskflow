@@ -77,6 +77,34 @@ def create_token(user_id: int) -> str:
     return f"{payload}.{signature}"
 
 
+def create_reset_token(user_id: int, ttl_seconds: int = 900) -> str:
+    """Short-lived signed token used for the forgot-password flow."""
+    payload = _b64url(
+        json.dumps({"uid": user_id, "exp": int(time.time()) + ttl_seconds, "pur": "reset"}).encode("utf-8")
+    )
+    signature = hmac.new(_load_secret().encode("utf-8"), payload.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{payload}.{signature}"
+
+
+def decode_reset_token(token: str) -> int | None:
+    """Return the user id if the reset token is valid, unexpired, and reset-scoped."""
+    try:
+        payload, signature = token.rsplit(".", 1)
+        expected = hmac.new(
+            _load_secret().encode("utf-8"), payload.encode("ascii"), hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            return None
+        data = json.loads(_unb64url(payload))
+        if data.get("pur") != "reset":
+            return None
+        if int(data["exp"]) < time.time():
+            return None
+        return int(data["uid"])
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
 def decode_token(token: str) -> int | None:
     """Return the user id if the token is well-formed and unexpired."""
     try:

@@ -545,6 +545,42 @@ button.small {
   border-color: var(--accent);
 }
 
+.link-btn {
+  display: inline-block;
+  width: auto;
+  padding: 2px 0;
+  margin: -4px 0 10px 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent-hover);
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-align: left;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+  background: transparent;
+}
+
+.guest-btn {
+  margin: 14px 0 0 0;
+  background: transparent;
+  border: 1px dashed var(--input-border);
+  color: var(--input-text);
+}
+
+.guest-btn:hover {
+  border-color: var(--accent);
+  background: var(--secondary-bg);
+}
+
+.auth-card .muted {
+  margin: 0 0 10px 0;
+  font-size: 0.82rem;
+}
+
 /* ---------------------------- Modal ---------------------------- */
 
 .modal {

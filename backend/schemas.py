@@ -74,6 +74,22 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1)
 
 
+class GuestRequest(BaseModel):
+    """Start a browser-scoped guest session (no account needed)."""
+    guest_id: str = Field(min_length=4, max_length=64)
+
+
+class ForgotRequest(BaseModel):
+    """Request a password reset code for an account identifier."""
+    identifier: str = Field(min_length=1)
+
+
+class ResetPasswordRequest(BaseModel):
+    """Complete the password reset with the issued code."""
+    reset_token: str = Field(min_length=1)
+    new_password: str = Field(min_length=1)
+
+
 class OAuthRequest(BaseModel):
     """OAuth sign-in. With GOOGLE_CLIENT_ID/GITHUB_CLIENT_ID configured the
     supplied id_token/code is verified; otherwise a demo profile is used."""
@@ -122,7 +138,7 @@ class ProjectCreate(ProjectBase):
 
 class ProjectRead(ProjectBase):
     id: int
-    owner_id: int
+    owner_id: int | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
