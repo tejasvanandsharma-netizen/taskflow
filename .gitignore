@@ -9,6 +9,9 @@ venv/
 *.db
 *.sqlite3
 
+# Runtime
+server.log
+
 # IDE / OS
 .vscode/
 .idea/
