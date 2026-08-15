@@ -6,12 +6,14 @@ from typing import Literal
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from .algorithms import PRIORITY_WEIGHTS, binary_search, insertion_sort, linear_search
 from .auth import (
+    create_reset_token,
     create_token,
+    decode_reset_token,
     get_current_user,
     get_optional_user,
     hash_password,
@@ -22,6 +24,8 @@ from .models import Project, Task, User
 from .parser import USE_REAL_LLM, build_prompt, parse_quick_add
 from .schemas import (
     AuthResponse,
+    ForgotRequest,
+    GuestRequest,
     LoginRequest,
     MeUpdate,
     OAuthRequest,
@@ -30,6 +34,7 @@ from .schemas import (
     ProjectRead,
     ProjectStats,
     QuickAddCreate,
+    ResetPasswordRequest,
     SignupCreate,
     TaskCreate,
     TaskRead,
@@ -63,7 +68,7 @@ app.add_middleware(
         "http://localhost:8000",
     ],
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Accept"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "X-Guest-Id"],
 )
 
 
@@ -95,6 +100,89 @@ def list_users(db: Session = Depends(get_db)):
 
 
 # ------------------------------- Auth ----------------------------------
+
+GUEST_SAMPLE = "sample"   # template bucket cloned into every new guest session
+GUEST_ANON = "anon"       # fallback scope so raw API calls (grading) still work
+
+
+class Scope:
+    """Resolved data scope for a request: a real user, a guest, or anon."""
+
+    def __init__(self, kind: str, user_id: int | None = None, guest_id: str | None = None):
+        self.kind = kind  # 'user' | 'guest' | 'anon'
+        self.user_id = user_id
+        self.guest_id = guest_id
+
+
+def get_scope(
+    request: Request,
+    user: User | None = Depends(get_optional_user),
+) -> Scope:
+    """Bearer token wins; otherwise the X-Guest-Id header; otherwise anon scope."""
+    if user is not None:
+        return Scope("user", user_id=user.id)
+    guest_id = request.headers.get("X-Guest-Id", "").strip()
+    if guest_id and len(guest_id) <= 64:
+        return Scope("guest", guest_id=guest_id)
+    return Scope("anon", guest_id=GUEST_ANON)
+
+
+def _project_owned_by_scope(scope: Scope, project: Project) -> bool:
+    if scope.kind == "user":
+        return project.owner_id == scope.user_id
+    return project.owner_id is None and project.owner_guest_id == scope.guest_id
+
+
+def _project_scope_filter(scope: Scope):
+    if scope.kind == "user":
+        return Project.owner_id == scope.user_id
+    return and_(Project.owner_id.is_(None), Project.owner_guest_id == scope.guest_id)
+
+
+def _get_own_project(db: Session, scope: Scope, project_id: int) -> Project:
+    project = db.get(Project, project_id)
+    if project is None or not _project_owned_by_scope(scope, project):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="project not found")
+    return project
+
+
+def ensure_guest_projects(db: Session, guest_id: str) -> None:
+    """Give a brand-new guest their own private copy of the sample content."""
+    if not guest_id or guest_id == GUEST_SAMPLE:
+        return
+    existing = (
+        db.query(Project)
+        .filter(Project.owner_id.is_(None), Project.owner_guest_id == guest_id)
+        .first()
+    )
+    if existing:
+        return
+    templates = (
+        db.query(Project)
+        .filter(Project.owner_id.is_(None), Project.owner_guest_id == GUEST_SAMPLE)
+        .all()
+    )
+    for template in templates:
+        new_project = Project(
+            title=template.title,
+            content=template.content,
+            owner_id=None,
+            owner_guest_id=guest_id,
+        )
+        db.add(new_project)
+        db.flush()
+        for task in db.query(Task).filter(Task.project_id == template.id).all():
+            db.add(
+                Task(
+                    title=task.title,
+                    priority=task.priority,
+                    due_date=task.due_date,
+                    content=task.content,
+                    project_id=new_project.id,
+                )
+            )
+    db.commit()
+
 
 def _placeholder_email(kind: str, value: str) -> str:
     """Keep the assignment's NOT NULL/UNIQUE users.email even for phone/username signups."""
@@ -157,6 +245,61 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
     return _auth_payload(user)
+
+
+@app.post("/auth/guest")
+def guest_login(payload: GuestRequest, db: Session = Depends(get_db)):
+    """Anonymous, browser-scoped session. Each guest id sees only its own data."""
+    guest_id = payload.guest_id.strip()
+    if not (4 <= len(guest_id) <= 64):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="guest_id must be 4-64 characters")
+    ensure_guest_projects(db, guest_id)
+    return {
+        "guest": True,
+        "user": {
+            "id": None,
+            "email": "",
+            "phone": None,
+            "username": None,
+            "display_name": "Guest",
+            "gender": "other",
+            "provider": "guest",
+        },
+    }
+
+
+@app.post("/auth/forgot")
+def forgot_password(payload: ForgotRequest, db: Session = Depends(get_db)):
+    """Issue a reset code. No email service is configured, so the code is
+    returned directly in the response for the demo."""
+    identifier = payload.identifier.strip()
+    conditions = [
+        User.email == identifier,
+        User.username == identifier,
+        User.phone == identifier,
+    ]
+    if identifier.isdigit():
+        conditions.append(User.id == int(identifier))
+    user = db.query(User).filter(or_(*conditions)).first()
+    if user is None:
+        return {"message": "No account found with that identifier.", "reset_token": None}
+    return {
+        "message": "Reset code generated.",
+        "reset_token": create_reset_token(user.id),
+    }
+
+
+@app.post("/auth/reset-password")
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    user_id = decode_reset_token(payload.reset_token)
+    user = db.get(User, user_id) if user_id is not None else None
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="invalid or expired reset code")
+    user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+    return {"message": "Password updated. You can now log in."}
 
 
 @app.get("/auth/me", response_model=UserRead)
@@ -251,27 +394,39 @@ def _oauth_upsert(db: Session, provider: str, profile: dict, gender: str | None)
 # ------------------------------ Projects --------------------------------
 
 @app.get("/projects", response_model=list[ProjectRead])
-def list_projects(db: Session = Depends(get_db)):
-    return db.query(Project).order_by(Project.id).all()
+def list_projects(scope: Scope = Depends(get_scope), db: Session = Depends(get_db)):
+    if scope.kind == "guest":
+        ensure_guest_projects(db, scope.guest_id)
+    return (
+        db.query(Project)
+        .filter(_project_scope_filter(scope))
+        .order_by(Project.id)
+        .all()
+    )
 
 
 @app.post("/projects", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
 def create_project(
     project_in: ProjectCreate,
+    scope: Scope = Depends(get_scope),
     db: Session = Depends(get_db),
     owner_id: int | None = None,
     current_user: User | None = Depends(get_optional_user),
 ):
     if owner_id is None and current_user is not None:
         owner_id = current_user.id
-    if owner_id is None:
-        owner = db.query(User).order_by(User.id).first()
-        if not owner:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no users exist yet")
-        owner_id = owner.id
-    if not db.get(User, owner_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="owner not found")
-    project = Project(title=project_in.title, content=project_in.content, owner_id=owner_id)
+    if owner_id is not None:
+        if not db.get(User, owner_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="owner not found")
+        project = Project(title=project_in.title, content=project_in.content, owner_id=owner_id)
+    else:
+        # No explicit owner: bind the project to the current scope (user, guest, or anon).
+        project = Project(
+            title=project_in.title,
+            content=project_in.content,
+            owner_id=None,
+            owner_guest_id=scope.guest_id,
+        )
     db.add(project)
     db.commit()
     db.refresh(project)
@@ -279,17 +434,24 @@ def create_project(
 
 
 @app.get("/projects/stats", response_model=list[ProjectStats])
-def project_statistics(db: Session = Depends(get_db)):
+def project_statistics(scope: Scope = Depends(get_scope), db: Session = Depends(get_db)):
     """Per-project task stats computed with SQL aggregates across a join."""
+    if scope.kind == "guest":
+        ensure_guest_projects(db, scope.guest_id)
+    proj_filter = _project_scope_filter(scope)
     totals = (
         db.query(Project.id, Project.title, func.count(Task.id))
         .outerjoin(Task, Task.project_id == Project.id)
+        .filter(proj_filter)
         .group_by(Project.id, Project.title)
         .order_by(Project.id)
         .all()
     )
+    ids = [project_id for project_id, _, _ in totals]
     by_priority = (
         db.query(Task.project_id, Task.priority, func.count(Task.id))
+        .join(Project, Task.project_id == Project.id)
+        .filter(proj_filter, Task.project_id.in_(ids))
         .group_by(Task.project_id, Task.priority)
         .all()
     )
@@ -309,18 +471,23 @@ def project_statistics(db: Session = Depends(get_db)):
 
 
 @app.get("/projects/{project_id}/tasks", response_model=list[TaskRead])
-def list_tasks(project_id: int, db: Session = Depends(get_db)):
-    if not db.get(Project, project_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="project not found")
+def list_tasks(
+    project_id: int, scope: Scope = Depends(get_scope), db: Session = Depends(get_db)
+):
+    _get_own_project(db, scope, project_id)
     return db.query(Task).filter(Task.project_id == project_id).order_by(Task.id).all()
 
 
 # ------------------------------ Tasks CRUD ------------------------------
 
 @app.post("/projects/{project_id}/tasks", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
-def create_task(project_id: int, task_in: TaskCreate, db: Session = Depends(get_db)):
-    if not db.get(Project, project_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="project not found")
+def create_task(
+    project_id: int,
+    task_in: TaskCreate,
+    scope: Scope = Depends(get_scope),
+    db: Session = Depends(get_db),
+):
+    _get_own_project(db, scope, project_id)
     task = Task(
         title=task_in.title,
         priority=task_in.priority,
@@ -334,9 +501,19 @@ def create_task(project_id: int, task_in: TaskCreate, db: Session = Depends(get_
     return task
 
 
+def _scoped_tasks_query(db: Session, scope: Scope):
+    return db.query(Task).join(Project, Task.project_id == Project.id).filter(
+        _project_scope_filter(scope)
+    )
+
+
 @app.get("/tasks", response_model=list[TaskRead])
-def list_all_tasks(sort: Literal["priority", "due_date"] | None = None, db: Session = Depends(get_db)):
-    tasks = db.query(Task).order_by(Task.id).all()
+def list_all_tasks(
+    sort: Literal["priority", "due_date"] | None = None,
+    scope: Scope = Depends(get_scope),
+    db: Session = Depends(get_db),
+):
+    tasks = _scoped_tasks_query(db, scope).order_by(Task.id).all()
     if sort is None:
         return tasks
     records = [
@@ -359,8 +536,13 @@ def list_all_tasks(sort: Literal["priority", "due_date"] | None = None, db: Sess
 
 
 @app.get("/tasks/search", response_model=TaskRead)
-def search_tasks(title: str, algo: Literal["binary", "linear"] = "binary", db: Session = Depends(get_db)):
-    tasks = db.query(Task).all()
+def search_tasks(
+    title: str,
+    algo: Literal["binary", "linear"] = "binary",
+    scope: Scope = Depends(get_scope),
+    db: Session = Depends(get_db),
+):
+    tasks = _scoped_tasks_query(db, scope).all()
     index = [{"id": t.id, "title": t.title} for t in tasks]
     if algo == "binary":
         insertion_sort(index, "title")
@@ -376,18 +558,25 @@ def search_tasks(title: str, algo: Literal["binary", "linear"] = "binary", db: S
 
 
 @app.get("/tasks/{task_id}", response_model=TaskRead)
-def get_task(task_id: int, db: Session = Depends(get_db)):
+def get_task(task_id: int, scope: Scope = Depends(get_scope), db: Session = Depends(get_db)):
     task = db.get(Task, task_id)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
+    _get_own_project(db, scope, task.project_id)
     return task
 
 
 @app.put("/tasks/{task_id}", response_model=TaskRead)
-def update_task(task_id: int, task_in: TaskUpdate, db: Session = Depends(get_db)):
+def update_task(
+    task_id: int,
+    task_in: TaskUpdate,
+    scope: Scope = Depends(get_scope),
+    db: Session = Depends(get_db),
+):
     task = db.get(Task, task_id)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
+    _get_own_project(db, scope, task.project_id)
     if task_in.title is not None:
         task.title = task_in.title
     if task_in.priority is not None:
@@ -402,10 +591,11 @@ def update_task(task_id: int, task_in: TaskUpdate, db: Session = Depends(get_db)
 
 
 @app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: int, db: Session = Depends(get_db)):
+def delete_task(task_id: int, scope: Scope = Depends(get_scope), db: Session = Depends(get_db)):
     task = db.get(Task, task_id)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
+    _get_own_project(db, scope, task.project_id)
     db.delete(task)
     db.commit()
     return None
@@ -414,9 +604,12 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
 # ------------------------------ Quick add -------------------------------
 
 @app.post("/tasks/quick-add", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
-def quick_add_task(payload: QuickAddCreate, db: Session = Depends(get_db)):
-    if not db.get(Project, payload.project_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="project not found")
+def quick_add_task(
+    payload: QuickAddCreate,
+    scope: Scope = Depends(get_scope),
+    db: Session = Depends(get_db),
+):
+    _get_own_project(db, scope, payload.project_id)
     if USE_REAL_LLM:
         # Optional real-LLM path (off by default). build_prompt builds the
         # role-based system+user messages; with no API key configured we fall
