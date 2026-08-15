@@ -66,6 +66,9 @@ try {
         } catch {
             $tunnelOk = $false
         }
+        if ($tunnelOk -and $url) {
+            Set-Content -LiteralPath (Join-Path $proj "live-url.txt") -Value $url
+        }
     }
 
     $cf = Get-Process cloudflared -ErrorAction SilentlyContinue

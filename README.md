@@ -114,7 +114,12 @@ wscript start_tunnel.vbs
 
 A startup shortcut named "TaskFlow Tunnel" auto-starts it at login (already
 installed on the author's machine). The public URL is printed to
-`tunnel.err`:
+`tunnel.err`. The watchdog also writes the current working URL to
+`live-url.txt` every minute, so you can read the live link from one file:
+
+```powershell
+Get-Content live-url.txt
+```
 
 ```powershell
 Select-String -Path tunnel.err -Pattern "https://[a-z0-9-]+\.trycloudflare\.com"
