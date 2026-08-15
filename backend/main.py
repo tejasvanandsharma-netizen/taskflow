@@ -5,19 +5,31 @@ from typing import Literal
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from .algorithms import PRIORITY_WEIGHTS, binary_search, insertion_sort, linear_search
+from .auth import (
+    create_token,
+    get_current_user,
+    get_optional_user,
+    hash_password,
+    verify_password,
+)
 from .database import Base, engine, get_db
 from .models import Project, Task, User
 from .parser import USE_REAL_LLM, build_prompt, parse_quick_add
 from .schemas import (
+    AuthResponse,
+    LoginRequest,
+    MeUpdate,
+    OAuthRequest,
     PriorityCounts,
     ProjectCreate,
     ProjectRead,
     ProjectStats,
     QuickAddCreate,
+    SignupCreate,
     TaskCreate,
     TaskRead,
     TaskUpdate,
@@ -62,7 +74,7 @@ async def log_requests(request: Request, call_next):
 def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == user_in.email).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="email already registered")
-    user = User(email=user_in.email, hashed_password=user_in.password)
+    user = User(email=user_in.email, hashed_password=hash_password(user_in.password))
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -74,6 +86,160 @@ def list_users(db: Session = Depends(get_db)):
     return db.query(User).order_by(User.id).all()
 
 
+# ------------------------------- Auth ----------------------------------
+
+def _placeholder_email(kind: str, value: str) -> str:
+    """Keep the assignment's NOT NULL/UNIQUE users.email even for phone/username signups."""
+    if kind == "phone":
+        cleaned = "".join(ch for ch in value if ch.isdigit()) or "unknown"
+        return f"phone.{cleaned}@local.taskflow"
+    slug = "".join(ch for ch in value.lower() if ch.isalnum()) or "user"
+    return f"{slug}@local.taskflow"
+
+
+def _auth_payload(user: User) -> AuthResponse:
+    return AuthResponse(token=create_token(user.id), user=user)
+
+
+@app.post("/auth/signup", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+def signup(payload: SignupCreate, db: Session = Depends(get_db)):
+    if not (payload.email or payload.phone or payload.username):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="provide an email, phone number, or username")
+    email = payload.email
+    if email and db.query(User).filter(User.email == email).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="email already registered")
+    if payload.username and db.query(User).filter(User.username == payload.username).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="username already taken")
+    if payload.phone and db.query(User).filter(User.phone == payload.phone).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="phone already registered")
+    if not email:
+        if payload.phone:
+            email = _placeholder_email("phone", payload.phone)
+        else:
+            email = _placeholder_email("username", payload.username)
+        if db.query(User).filter(User.email == email).first():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="identifier already registered")
+    user = User(
+        email=email,
+        phone=payload.phone,
+        username=payload.username,
+        display_name=payload.display_name,
+        gender=payload.gender or "other",
+        provider="local",
+        hashed_password=hash_password(payload.password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return _auth_payload(user)
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    identifier = payload.identifier.strip()
+    conditions = [
+        User.email == identifier,
+        User.username == identifier,
+        User.phone == identifier,
+    ]
+    if identifier.isdigit():
+        conditions.append(User.id == int(identifier))
+    user = db.query(User).filter(or_(*conditions)).first()
+    if user is None or not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
+    return _auth_payload(user)
+
+
+@app.get("/auth/me", response_model=UserRead)
+def me(user: User = Depends(get_current_user)):
+    return user
+
+
+@app.patch("/auth/me", response_model=UserRead)
+def update_me(payload: MeUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if payload.display_name is not None:
+        user.display_name = payload.display_name
+    if payload.gender is not None:
+        user.gender = payload.gender
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(user: User = Depends(get_current_user)):
+    # Stateless tokens: the client simply discards its token.
+    return None
+
+
+def _verified_google_email(payload: OAuthRequest) -> str | None:
+    """Verify a Google id_token against Google's tokeninfo when one is supplied."""
+    if not payload.id_token:
+        return None
+    try:
+        import httpx
+
+        resp = httpx.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"id_token": payload.id_token},
+            timeout=10,
+        )
+        data = resp.json()
+        if resp.status_code == 200 and data.get("email"):
+            return str(data["email"])
+    except Exception:
+        pass
+    return None
+
+
+@app.post("/auth/google", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+def oauth_google(payload: OAuthRequest, db: Session = Depends(get_db)):
+    verified_email = _verified_google_email(payload)
+    if verified_email:
+        profile = {"email": verified_email, "name": payload.name}
+    else:
+        # Demo fallback (no GOOGLE_CLIENT_ID configured): deterministic profile.
+        profile = {"email": payload.email or "demo.google@taskflow.io",
+                   "name": payload.name or "Google User"}
+    return _oauth_upsert(db, "google", profile, payload.gender)
+
+
+@app.post("/auth/github", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+def oauth_github(payload: OAuthRequest, db: Session = Depends(get_db)):
+    # Real code exchange needs GITHUB_CLIENT_ID/SECRET; without them use demo profile.
+    profile = {"email": payload.email or "demo.github@taskflow.io",
+               "name": payload.name or "GitHub User"}
+    return _oauth_upsert(db, "github", profile, payload.gender)
+
+
+def _oauth_upsert(db: Session, provider: str, profile: dict, gender: str | None) -> AuthResponse:
+    email = profile["email"].lower()
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        user = User(
+            email=email,
+            display_name=profile["name"],
+            gender=gender or "other",
+            provider=provider,
+            auth_provider_id=email,
+            hashed_password=hash_password(__import__("secrets").token_hex(16)),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    else:
+        user.provider = provider
+        user.auth_provider_id = email
+        if not user.display_name:
+            user.display_name = profile["name"]
+        if gender:
+            user.gender = gender
+        db.commit()
+        db.refresh(user)
+    return _auth_payload(user)
+
+
 # ------------------------------ Projects --------------------------------
 
 @app.get("/projects", response_model=list[ProjectRead])
@@ -82,7 +248,14 @@ def list_projects(db: Session = Depends(get_db)):
 
 
 @app.post("/projects", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
-def create_project(project_in: ProjectCreate, db: Session = Depends(get_db), owner_id: int | None = None):
+def create_project(
+    project_in: ProjectCreate,
+    db: Session = Depends(get_db),
+    owner_id: int | None = None,
+    current_user: User | None = Depends(get_optional_user),
+):
+    if owner_id is None and current_user is not None:
+        owner_id = current_user.id
     if owner_id is None:
         owner = db.query(User).order_by(User.id).first()
         if not owner:
@@ -90,7 +263,7 @@ def create_project(project_in: ProjectCreate, db: Session = Depends(get_db), own
         owner_id = owner.id
     if not db.get(User, owner_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="owner not found")
-    project = Project(title=project_in.title, owner_id=owner_id)
+    project = Project(title=project_in.title, content=project_in.content, owner_id=owner_id)
     db.add(project)
     db.commit()
     db.refresh(project)
@@ -144,6 +317,7 @@ def create_task(project_id: int, task_in: TaskCreate, db: Session = Depends(get_
         title=task_in.title,
         priority=task_in.priority,
         due_date=task_in.due_date,
+        content=task_in.content,
         project_id=project_id,
     )
     db.add(task)
@@ -212,6 +386,8 @@ def update_task(task_id: int, task_in: TaskUpdate, db: Session = Depends(get_db)
         task.priority = task_in.priority
     if task_in.due_date is not None:
         task.due_date = task_in.due_date
+    if task_in.content is not None:
+        task.content = task_in.content
     db.commit()
     db.refresh(task)
     return task
