@@ -115,9 +115,11 @@
 
       <form id="login-form" novalidate>
         <label for="login-identifier">Email, phone, username or user id</label>
-        <input type="text" id="login-identifier" autocomplete="username" placeholder="e.g. demo@taskflow.io or demo or 9876543210">
+        <input type="text" id="login-identifier" autocomplete="username" placeholder="e.g. you@example.com or 9876543210 or yourname">
         <label for="login-password">Password</label>
         <input type="password" id="login-password" autocomplete="current-password">
+        <button type="button" id="forgot-btn" class="link-btn">Forgot password?</button>
+        <p id="login-info" class="muted hidden"></p>
         <p id="login-error" class="error hidden"></p>
         <button type="submit" class="primary">Log In</button>
       </form>
@@ -126,7 +128,7 @@
         <label for="signup-name">Name</label>
         <input type="text" id="signup-name" placeholder="Your name">
         <label for="signup-identifier">Email, phone or username</label>
-        <input type="text" id="signup-identifier" autocomplete="username" placeholder="e.g. demo@taskflow.io or 9876543210 or demo">
+        <input type="text" id="signup-identifier" autocomplete="username" placeholder="e.g. you@example.com or 9876543210 or yourname">
         <label for="signup-password">Password</label>
         <input type="password" id="signup-password" autocomplete="new-password">
         <label for="signup-gender">Gender</label>
@@ -144,6 +146,8 @@
         <button type="button" id="google-btn" class="oauth google">Google</button>
         <button type="button" id="github-btn" class="oauth github">GitHub</button>
       </div>
+
+      <button type="button" id="guest-btn" class="guest-btn">Login as Guest</button>
     </div>
   </section>
 
@@ -162,6 +166,28 @@
     </div>
   </div>
 
+  <div id="forgot-modal" class="modal hidden">
+    <div class="modal-card">
+      <h3>Reset your password</h3>
+      <p class="muted">Enter the email, phone, or username you signed up with, then tap "Get Reset Code".</p>
+      <label for="forgot-identifier">Account identifier</label>
+      <input type="text" id="forgot-identifier" autocomplete="off" placeholder="e.g. you@example.com">
+      <p id="forgot-info" class="muted hidden"></p>
+      <label for="reset-code">Reset code</label>
+      <input type="text" id="reset-code" autocomplete="off" placeholder="Copy the code shown above">
+      <label for="reset-password">New password</label>
+      <input type="password" id="reset-password" autocomplete="new-password">
+      <p id="forgot-error" class="error hidden"></p>
+      <div class="modal-actions">
+        <button type="button" id="forgot-getcode" class="secondary">Get Reset Code</button>
+        <button type="button" id="forgot-cancel" class="secondary">Close</button>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="reset-confirm" class="primary">Set New Password</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     (function () {
       'use strict';
@@ -175,6 +201,7 @@
       try {
         currentUser = JSON.parse(localStorage.getItem('tf_user') || 'null');
       } catch (err) { currentUser = null; }
+      var guestId = localStorage.getItem('tf_guest') || '';
 
       var projects = [];
       var allTasks = [];
@@ -222,14 +249,26 @@
       var tabSignup = document.getElementById('tab-signup');
       var loginError = document.getElementById('login-error');
       var signupError = document.getElementById('signup-error');
+      var loginInfo = document.getElementById('login-info');
       var googleBtn = document.getElementById('google-btn');
       var githubBtn = document.getElementById('github-btn');
+      var guestBtn = document.getElementById('guest-btn');
       var oauthModal = document.getElementById('oauth-modal');
       var oauthTitle = document.getElementById('oauth-title');
       var oauthEmail = document.getElementById('oauth-email');
       var oauthName = document.getElementById('oauth-name');
       var oauthCancel = document.getElementById('oauth-cancel');
       var oauthConfirm = document.getElementById('oauth-confirm');
+      var forgotBtn = document.getElementById('forgot-btn');
+      var forgotModal = document.getElementById('forgot-modal');
+      var forgotIdentifier = document.getElementById('forgot-identifier');
+      var forgotInfo = document.getElementById('forgot-info');
+      var forgotError = document.getElementById('forgot-error');
+      var forgotGetCode = document.getElementById('forgot-getcode');
+      var forgotCancel = document.getElementById('forgot-cancel');
+      var resetCode = document.getElementById('reset-code');
+      var resetPassword = document.getElementById('reset-password');
+      var resetConfirm = document.getElementById('reset-confirm');
 
       function setStatus(message) {
         statusEl.textContent = message;
@@ -274,6 +313,8 @@
         options.headers = options.headers || {};
         if (token) {
           options.headers.Authorization = 'Bearer ' + token;
+        } else if (guestId) {
+          options.headers['X-Guest-Id'] = guestId;
         }
         var res = await fetch(path, options);
         if (res.status === 401) {
@@ -300,8 +341,13 @@
       }
 
       function renderAvatarMenu(user) {
-        avatarName.textContent = user.display_name || user.username || user.email;
-        avatarId.textContent = user.email || (user.phone || user.username);
+        if (user && user.guest) {
+          avatarName.textContent = 'Guest';
+          avatarId.textContent = 'Guest account \u2014 data stays in this browser';
+        } else {
+          avatarName.textContent = user.display_name || user.username || user.email;
+          avatarId.textContent = user.email || (user.phone || user.username);
+        }
         avatarGender.value = user.gender || 'other';
       }
 
@@ -355,6 +401,8 @@
           return;
         }
         clearError(loginError);
+        loginInfo.classList.add('hidden');
+        loginInfo.textContent = '';
         try {
           var res = await fetch('/auth/login', {
             method: 'POST',
@@ -413,8 +461,8 @@
       function openOAuth(provider) {
         oauthProvider = provider;
         oauthTitle.textContent = provider === 'google' ? 'Sign in with Google' : 'Sign in with GitHub';
-        oauthEmail.value = provider === 'google' ? 'demo.google@taskflow.io' : 'demo.github@taskflow.io';
-        oauthName.value = provider === 'google' ? 'Google User' : 'GitHub User';
+        oauthEmail.value = '';
+        oauthName.value = '';
         oauthModal.classList.remove('hidden');
         oauthEmail.focus();
       }
@@ -422,6 +470,116 @@
       googleBtn.addEventListener('click', function () { openOAuth('google'); });
       githubBtn.addEventListener('click', function () { openOAuth('github'); });
       oauthCancel.addEventListener('click', function () { oauthModal.classList.add('hidden'); });
+
+      function ensureGuestId() {
+        if (guestId) return guestId;
+        var bytes = new Uint8Array(16);
+        if (window.crypto && crypto.getRandomValues) {
+          crypto.getRandomValues(bytes);
+        } else {
+          for (var i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+        }
+        var hex = '';
+        for (var i = 0; i < bytes.length; i++) {
+          hex += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
+        }
+        guestId = hex;
+        localStorage.setItem('tf_guest', guestId);
+        return guestId;
+      }
+
+      function guestProfile() {
+        return {
+          guest: true,
+          id: null,
+          display_name: 'Guest',
+          email: '',
+          username: null,
+          gender: localStorage.getItem('tf_guest_gender') || 'other',
+          provider: 'guest'
+        };
+      }
+
+      guestBtn.addEventListener('click', function () {
+        ensureGuestId();
+        localStorage.removeItem('tf_guest_opted_out');
+        try {
+          fetch('/auth/guest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ guest_id: guestId })
+          }).catch(function () { /* guest content is also cloned lazily on first load */ });
+        } catch (err) { /* offline-safe */ }
+        enterApp(guestProfile());
+      });
+
+      forgotBtn.addEventListener('click', function () {
+        forgotIdentifier.value = '';
+        resetCode.value = '';
+        resetPassword.value = '';
+        forgotInfo.textContent = '';
+        forgotInfo.classList.add('hidden');
+        clearError(forgotError);
+        forgotModal.classList.remove('hidden');
+        forgotIdentifier.focus();
+      });
+
+      forgotCancel.addEventListener('click', function () { forgotModal.classList.add('hidden'); });
+
+      forgotGetCode.addEventListener('click', async function () {
+        var identifier = forgotIdentifier.value.trim();
+        if (!identifier) {
+          showError(forgotError, 'Enter your email, phone, or username first.');
+          return;
+        }
+        clearError(forgotError);
+        try {
+          var res = await fetch('/auth/forgot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier: identifier })
+          });
+          var body = await res.json();
+          if (res.ok && body.reset_token) {
+            resetCode.value = body.reset_token;
+            forgotInfo.textContent = 'Reset code generated. Copy it below, enter a new password, then tap Set New Password.';
+          } else {
+            resetCode.value = '';
+            forgotInfo.textContent = (body && body.message) || 'No account found with that identifier.';
+          }
+          forgotInfo.classList.remove('hidden');
+        } catch (err) {
+          showError(forgotError, 'Could not request a reset code: ' + err.message);
+        }
+      });
+
+      resetConfirm.addEventListener('click', async function () {
+        var code = resetCode.value.trim();
+        var password = resetPassword.value;
+        if (!code || !password) {
+          showError(forgotError, 'Enter the reset code and a new password.');
+          return;
+        }
+        clearError(forgotError);
+        try {
+          var res = await fetch('/auth/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reset_token: code, new_password: password })
+          });
+          var body = await res.json();
+          if (!res.ok) {
+            throw new Error((body && body.detail) || 'Reset failed');
+          }
+          forgotModal.classList.add('hidden');
+          switchTab('login');
+          clearError(loginError);
+          loginInfo.textContent = 'Password reset successfully. Log in with your new password.';
+          loginInfo.classList.remove('hidden');
+        } catch (err) {
+          showError(forgotError, err.message);
+        }
+      });
 
       oauthConfirm.addEventListener('click', async function () {
         var email = oauthEmail.value.trim();
@@ -450,6 +608,7 @@
         currentUser = null;
         localStorage.removeItem('tf_token');
         localStorage.removeItem('tf_user');
+        localStorage.setItem('tf_guest_opted_out', '1');
         avatarMenu.classList.add('hidden');
         showAuth();
       });
@@ -471,22 +630,32 @@
         }
       });
 
-      avatarGender.addEventListener('change', async function () {
-        var gender = avatarGender.value;
-        try {
-          var res = await api('/auth/me', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gender: gender })
-          });
-          currentUser = await res.json();
-          localStorage.setItem('tf_user', JSON.stringify(currentUser));
+      avatarGender.addEventListener('change', function () {
+        if (currentUser && currentUser.guest) {
+          currentUser.gender = avatarGender.value;
+          localStorage.setItem('tf_guest_gender', avatarGender.value);
           setAvatar(currentUser);
           renderAvatarMenu(currentUser);
           setStatus('Gender updated.');
-        } catch (err) {
-          setStatus('Could not update gender: ' + err.message);
+          return;
         }
+        var gender = avatarGender.value;
+        (async function () {
+          try {
+            var res = await api('/auth/me', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ gender: gender })
+            });
+            currentUser = await res.json();
+            localStorage.setItem('tf_user', JSON.stringify(currentUser));
+            setAvatar(currentUser);
+            renderAvatarMenu(currentUser);
+            setStatus('Gender updated.');
+          } catch (err) {
+            setStatus('Could not update gender: ' + err.message);
+          }
+        })();
       });
 
       // ---------------- Theme ----------------
@@ -898,21 +1067,24 @@
       // ---------------- Boot ----------------
 
       async function boot() {
-        if (!token) {
-          showAuth();
+        if (token) {
+          try {
+            var res = await api('/auth/me');
+            var user = await res.json();
+            enterApp(user);
+            return;
+          } catch (err) {
+            token = null;
+            currentUser = null;
+            localStorage.removeItem('tf_token');
+            localStorage.removeItem('tf_user');
+          }
+        }
+        if (guestId && localStorage.getItem('tf_guest_opted_out') !== '1') {
+          enterApp(guestProfile());
           return;
         }
-        try {
-          var res = await api('/auth/me');
-          var user = await res.json();
-          enterApp(user);
-        } catch (err) {
-          token = null;
-          currentUser = null;
-          localStorage.removeItem('tf_token');
-          localStorage.removeItem('tf_user');
-          showAuth();
-        }
+        showAuth();
       }
 
       resetForm();
