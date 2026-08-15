@@ -21,3 +21,4 @@ tunnel.err
 .idea/
 .DS_Store
 Thumbs.db
+.tunnelfail
