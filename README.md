@@ -65,6 +65,40 @@ python check_algorithms.py   # Section 2 PASS/FAIL checks
 python benchmark.py          # Section 2 comparison-count benchmarks
 ```
 
+### Seed demo data
+
+Creates `demo@taskflow.io` (password `demo123`), the project `Demo Project`,
+and a sample task. Safe to run repeatedly — it never duplicates:
+
+```bash
+python seed.py
+```
+
+### Auto-start the server (permanent fix)
+
+The server normally runs only while the terminal is open. To make it start
+automatically every time you log in (no console window, no manual command):
+
+```powershell
+# 1. Double-click start_server.vbs (or run it once):
+wscript start_server.vbs
+
+# 2. Register it for auto-start at login (already done on the author's machine):
+#    a shortcut named "TaskFlow Server" is placed in the Startup folder
+#    pointing to start_server.vbs. It launches .venv\Scripts\pythonw.exe
+#    with run_server.py, which writes logs to server.log.
+```
+
+After a reboot (or after the shortcut runs), open http://127.0.0.1:8000 —
+no manual command needed. `run_server.py` logs to `server.log` in the repo
+root so errors are still visible.
+
+To stop the background server: `Get-Process pythonw | Stop-Process` (closes
+all hidden `pythonw` instances).
+
+> To let *other devices* on your network reach the app, change `host` to
+> `0.0.0.0` in `run_server.py` (and allow port 8000 in Windows Firewall).
+
 ## Endpoint list
 
 ### Create — users
