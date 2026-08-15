@@ -140,7 +140,8 @@ can open the app from any device/browser.
 ```
 
 ### Create — projects
-`POST /projects?owner_id=1`
+`POST /projects` — `owner_id` is optional; when omitted the first user owns
+the project (that is what the dashboard's "Add Project" form uses).
 ```json
 // Request
 {"title": "Dark Store A"}
@@ -149,6 +150,7 @@ can open the app from any device/browser.
 // Response 201
 {"title": "Dark Store A", "id": 1, "owner_id": 1}
 ```
+Explicit owner: `POST /projects?owner_id=1`
 
 ### Create — task
 `POST /projects/1/tasks`
@@ -345,5 +347,10 @@ fully testable while still demonstrating the prompt design.
   `document.createElement` (no `innerHTML`), caches the task list in
   `localStorage` (rendered instantly on reload, then refreshed from the API),
   and validates the task form client-side before submitting.
+- The dashboard also has a **light/dark mode toggle** (persisted in
+  `localStorage`; the whole theme is driven by CSS custom properties and a
+  `body.dark` class) and an **"Add Project" form** so projects can be created
+  from the UI without knowing any ids (`POST /projects` auto-assigns the
+  first user as owner).
 - The required repository should be a single public GitHub repo with a feature
   branch that was committed to at least twice and merged back into `main`.

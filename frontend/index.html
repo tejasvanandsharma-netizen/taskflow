@@ -9,6 +9,7 @@
 <body>
   <aside class="sidebar">
     <h1>TaskFlow</h1>
+    <button type="button" id="theme-toggle" class="secondary">Dark Mode</button>
 
     <section class="panel">
       <h2>Quick Add</h2>
@@ -44,6 +45,9 @@
     <section class="panel">
       <h2>Project</h2>
       <select id="project-select"></select>
+      <label for="project-title">Add a project</label>
+      <input type="text" id="project-title" placeholder="e.g. Dark Store A">
+      <button type="button" id="project-add-btn" class="secondary">Add Project</button>
       <button type="button" id="sort-priority-btn" class="secondary">Sort by Priority</button>
     </section>
   </aside>
@@ -79,6 +83,9 @@
       var formHeading = document.getElementById('form-heading');
 
       var sortBtn = document.getElementById('sort-priority-btn');
+      var themeToggle = document.getElementById('theme-toggle');
+      var projectTitle = document.getElementById('project-title');
+      var projectAddBtn = document.getElementById('project-add-btn');
 
       var currentTasks = [];
       var editingTaskId = null;
@@ -341,6 +348,51 @@
           }, true)
         );
         setStatus('Sorted by priority (high first)');
+      });
+
+      function applyTheme(theme) {
+        document.body.classList.toggle('dark', theme === 'dark');
+        themeToggle.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+      }
+
+      applyTheme(localStorage.getItem('theme') || 'light');
+
+      themeToggle.addEventListener('click', function () {
+        var next = document.body.classList.contains('dark') ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        applyTheme(next);
+      });
+
+      async function addProject() {
+        var title = projectTitle.value.trim();
+        if (!title) {
+          setStatus('Enter a project name first.');
+          projectTitle.focus();
+          return;
+        }
+        try {
+          var res = await requestJson('/projects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: title })
+          });
+          var created = await res.json();
+          projectTitle.value = '';
+          await loadProjects();
+          projectSelect.value = String(created.id);
+          await loadTasks();
+          setStatus('Project "' + title + '" added.');
+        } catch (err) {
+          setStatus('Add project failed: ' + err.message);
+        }
+      }
+
+      projectAddBtn.addEventListener('click', addProject);
+      projectTitle.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          addProject();
+        }
       });
 
       resetForm();

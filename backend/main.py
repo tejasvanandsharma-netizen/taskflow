@@ -82,7 +82,12 @@ def list_projects(db: Session = Depends(get_db)):
 
 
 @app.post("/projects", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
-def create_project(project_in: ProjectCreate, owner_id: int, db: Session = Depends(get_db)):
+def create_project(project_in: ProjectCreate, db: Session = Depends(get_db), owner_id: int | None = None):
+    if owner_id is None:
+        owner = db.query(User).order_by(User.id).first()
+        if not owner:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no users exist yet")
+        owner_id = owner.id
     if not db.get(User, owner_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="owner not found")
     project = Project(title=project_in.title, owner_id=owner_id)
