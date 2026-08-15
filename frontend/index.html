@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaskFlow</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <h1>TaskFlow</h1>
+
+    <section class="panel">
+      <h2>Quick Add</h2>
+      <form id="quick-add-form" novalidate>
+        <input type="text" id="quick-add-input"
+               placeholder="e.g. Finish report tomorrow urgent">
+        <button type="submit" class="primary">Add</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2 id="form-heading">New Task</h2>
+      <form id="task-form" novalidate>
+        <label for="task-title">Title</label>
+        <input type="text" id="task-title" placeholder="Task title">
+        <p id="title-error" class="error hidden">Title is required.</p>
+
+        <label for="task-priority">Priority</label>
+        <select id="task-priority">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+        </select>
+
+        <label for="task-due-date">Due date</label>
+        <input type="text" id="task-due-date" placeholder="e.g. tomorrow">
+
+        <button type="submit" class="primary" id="task-submit">Add Task</button>
+        <button type="button" id="task-cancel" class="secondary hidden">Cancel Edit</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Project</h2>
+      <select id="project-select"></select>
+      <button type="button" id="sort-priority-btn" class="secondary">Sort by Priority</button>
+    </section>
+  </aside>
+
+  <main class="content">
+    <h2 id="project-heading">Tasks</h2>
+    <p id="status" class="status" role="status"></p>
+    <ul id="task-list" class="task-list"></ul>
+  </main>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var WEIGHTS = { low: 1, medium: 2, high: 3 };
+      var DEFAULT_TITLE = 'Untitled task';
+
+      var projectSelect = document.getElementById('project-select');
+      var projectHeading = document.getElementById('project-heading');
+      var taskList = document.getElementById('task-list');
+      var statusEl = document.getElementById('status');
+
+      var quickAddForm = document.getElementById('quick-add-form');
+      var quickAddInput = document.getElementById('quick-add-input');
+
+      var taskForm = document.getElementById('task-form');
+      var taskTitle = document.getElementById('task-title');
+      var taskPriority = document.getElementById('task-priority');
+      var taskDueDate = document.getElementById('task-due-date');
+      var titleError = document.getElementById('title-error');
+      var taskSubmit = document.getElementById('task-submit');
+      var taskCancel = document.getElementById('task-cancel');
+      var formHeading = document.getElementById('form-heading');
+
+      var sortBtn = document.getElementById('sort-priority-btn');
+
+      var currentTasks = [];
+      var editingTaskId = null;
+
+      function setStatus(message) {
+        statusEl.textContent = message;
+      }
+
+      function cacheKey(projectId) {
+        return 'tasks_cache_v2_' + projectId;
+      }
+
+      function insertionSort(arr, key, reverse) {
+        var result = arr.slice();
+        for (var i = 1; i < result.length; i++) {
+          var current = result[i];
+          var j = i - 1;
+          while (j >= 0 && ((key(result[j]) > key(current)) !== !!reverse)) {
+            result[j + 1] = result[j];
+            j--;
+          }
+          result[j + 1] = current;
+        }
+        return result;
+      }
+
+      function saveCache(projectId, tasks) {
+        try {
+          localStorage.setItem(cacheKey(projectId), JSON.stringify(tasks));
+        } catch (err) {
+          // storage unavailable or full; live fetch still works
+        }
+      }
+
+      function showTitleError() {
+        titleError.classList.remove('hidden');
+      }
+
+      function clearTitleError() {
+        titleError.classList.add('hidden');
+      }
+
+      function buildTaskItem(task) {
+        var li = document.createElement('li');
+        li.className = 'task-item priority-' + task.priority;
+
+        var info = document.createElement('div');
+        info.className = 'task-info';
+
+        var title = document.createElement('span');
+        title.className = 'task-title';
+        title.textContent = task.title;
+
+        var meta = document.createElement('span');
+        meta.className = 'task-meta';
+        meta.textContent = 'Priority: ' + task.priority +
+          (task.due_date ? ' \u00b7 Due: ' + task.due_date : '');
+
+        info.appendChild(title);
+        info.appendChild(meta);
+
+        var actions = document.createElement('div');
+        actions.className = 'task-actions';
+
+        var editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'secondary small';
+        editBtn.textContent = 'Edit';
+        editBtn.addEventListener('click', function () { startEdit(task); });
+
+        var deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'danger small';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.addEventListener('click', function () { deleteTask(task); });
+
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
+
+        li.appendChild(info);
+        li.appendChild(actions);
+        return li;
+      }
+
+      function renderTasks(tasks) {
+        currentTasks = tasks;
+        taskList.textContent = '';
+        if (!tasks.length) {
+          var li = document.createElement('li');
+          li.className = 'task-item empty';
+          li.textContent = 'No tasks yet. Add one from the sidebar.';
+          taskList.appendChild(li);
+        } else {
+          tasks.forEach(function (task) {
+            taskList.appendChild(buildTaskItem(task));
+          });
+        }
+        saveCache(projectSelect.value, tasks);
+      }
+
+      function startEdit(task) {
+        editingTaskId = task.id;
+        taskTitle.value = task.title;
+        taskPriority.value = task.priority;
+        taskDueDate.value = task.due_date || '';
+        formHeading.textContent = 'Edit Task';
+        taskSubmit.textContent = 'Save Changes';
+        taskCancel.classList.remove('hidden');
+        clearTitleError();
+        window.scrollTo(0, 0);
+      }
+
+      function resetForm() {
+        editingTaskId = null;
+        taskTitle.value = '';
+        taskPriority.value = 'medium';
+        taskDueDate.value = '';
+        formHeading.textContent = 'New Task';
+        taskSubmit.textContent = 'Add Task';
+        taskCancel.classList.add('hidden');
+        clearTitleError();
+      }
+
+      async function requestJson(url, options) {
+        var res = await fetch(url, options);
+        if (!res.ok) {
+          throw new Error('HTTP ' + res.status + ': ' + (await res.text()));
+        }
+        return res;
+      }
+
+      async function loadProjects() {
+        try {
+          var res = await requestJson('/projects');
+          var projects = await res.json();
+          projectSelect.textContent = '';
+          projects.forEach(function (project) {
+            var opt = document.createElement('option');
+            opt.value = project.id;
+            opt.textContent = project.title;
+            projectSelect.appendChild(opt);
+          });
+          if (projects.length) {
+            projectSelect.value = projects[0].id;
+            await loadTasks();
+          } else {
+            projectHeading.textContent = 'Tasks';
+            renderTasks([]);
+            setStatus('No projects yet. Create one via the API.');
+          }
+        } catch (err) {
+          setStatus('Error loading projects: ' + err.message);
+        }
+      }
+
+      async function loadTasks() {
+        var projectId = projectSelect.value;
+        if (!projectId) return;
+        projectHeading.textContent = projectSelect.selectedOptions[0]
+          ? projectSelect.selectedOptions[0].textContent + ' tasks'
+          : 'Tasks';
+
+        try {
+          var cached = localStorage.getItem(cacheKey(projectId));
+          if (cached) {
+            renderTasks(JSON.parse(cached));
+            setStatus('Showing cached tasks \u2014 refreshing\u2026');
+          }
+        } catch (err) {
+          // corrupt cache; ignore and refetch below
+        }
+
+        try {
+          var res = await requestJson('/projects/' + projectId + '/tasks');
+          var tasks = await res.json();
+          renderTasks(tasks);
+          setStatus('Loaded ' + tasks.length + ' task' + (tasks.length === 1 ? '' : 's'));
+        } catch (err) {
+          setStatus('Error loading tasks: ' + err.message);
+        }
+      }
+
+      taskForm.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        var title = taskTitle.value.trim();
+        if (!title) {
+          showTitleError();
+          taskTitle.focus();
+          return;
+        }
+        clearTitleError();
+        var payload = {
+          title: title,
+          priority: taskPriority.value,
+          due_date: taskDueDate.value.trim() || null
+        };
+        try {
+          var url = editingTaskId
+            ? '/tasks/' + editingTaskId
+            : '/projects/' + projectSelect.value + '/tasks';
+          await requestJson(url, {
+            method: editingTaskId ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          resetForm();
+          await loadTasks();
+        } catch (err) {
+          setStatus('Save failed: ' + err.message);
+        }
+      });
+
+      taskTitle.addEventListener('input', function () {
+        if (taskTitle.value.trim()) {
+          clearTitleError();
+        }
+      });
+
+      taskCancel.addEventListener('click', resetForm);
+
+      async function deleteTask(task) {
+        if (!window.confirm('Delete task "' + task.title + '"?')) return;
+        try {
+          await requestJson('/tasks/' + task.id, { method: 'DELETE' });
+          if (editingTaskId === task.id) resetForm();
+          await loadTasks();
+        } catch (err) {
+          setStatus('Delete failed: ' + err.message);
+        }
+      }
+
+      quickAddForm.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        var description = quickAddInput.value.trim();
+        if (!description) return;
+        try {
+          await requestJson('/tasks/quick-add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              description: description,
+              project_id: Number(projectSelect.value)
+            })
+          });
+          quickAddInput.value = '';
+          await loadTasks();
+        } catch (err) {
+          setStatus('Quick add failed: ' + err.message);
+        }
+      });
+
+      projectSelect.addEventListener('change', function () {
+        loadTasks();
+      });
+
+      sortBtn.addEventListener('click', function () {
+        renderTasks(
+          insertionSort(currentTasks, function (task) {
+            return WEIGHTS[task.priority] || 0;
+          }, true)
+        );
+        setStatus('Sorted by priority (high first)');
+      });
+
+      resetForm();
+      loadProjects();
+    })();
+  </script>
+</body>
+</html>
