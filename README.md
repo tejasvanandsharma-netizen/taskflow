@@ -128,10 +128,19 @@ Select-String -Path tunnel.err -Pattern "https://[a-z0-9-]+\.trycloudflare\.com"
 Example: `https://something-words.trycloudflare.com`. Anyone with that link
 can open the app from any device/browser.
 
+### Live deployment (permanent URL)
+
+Deployed on Render (free) — anyone can open it anywhere, anytime:
+
+**https://taskflow-kw0d.onrender.com**
+
+The app is deployed from the `main` branch via the `render.yaml` blueprint.
+`AUTO_SEED=1` creates the sample content on a fresh instance. Note: the free
+plan sleeps after ~15 minutes of inactivity (it wakes on the next request),
+and its filesystem is ephemeral — data resets on redeploys.
+
 > **Note:** the free quick-tunnel URL **changes every time** the tunnel
-> restarts (reboot). If you need one permanent URL, deploy the app to a
-> free cloud host (e.g. Render) or use a Cloudflare named tunnel with a
-> domain. The local URL `http://127.0.0.1:8000` always works on the PC.
+> restarts (reboot). The Render URL above is permanent.
 
 ### Watchdog — keeps the server and tunnel alive
 
