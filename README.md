@@ -38,7 +38,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-`requirements.txt` pins `fastapi`, `pydantic`, `sqlalchemy`, `uvicorn`, and `httpx2`.
+`requirements.txt` pins `fastapi`, `pydantic`, `sqlalchemy`, `uvicorn`, and `httpx`.
 
 ## How to run the whole app (single process)
 
@@ -102,10 +102,24 @@ all hidden `pythonw` instances).
 > `0.0.0.0` in `run_server.py` (and allow port 8000 in Windows Firewall).
 > This is already the default in this repo.
 
+### Live deployment (permanent URL)
+
+Deployed on Render (free) — anyone can open it anywhere, anytime:
+
+**https://taskflow-kw0d.onrender.com**
+
+The app is deployed from the `main` branch via the `render.yaml` blueprint.
+`AUTO_SEED=1` creates the sample content on a fresh instance. Note: the free
+plan sleeps after ~15 minutes of inactivity (it wakes on the next request),
+and its filesystem is ephemeral — data resets on redeploys.
+
 ### Public access for anyone (internet)
 
-A Cloudflare tunnel exposes the app to the whole internet with a public
-`https://` URL — no router setup, no account needed.
+A Cloudflare tunnel exposes the local instance to the whole internet with a
+public `https://` URL — no router setup, no account needed.
+
+> **Prefer the permanent hosted URL** below. The quick-tunnel URL changes
+> every time the tunnel restarts, so it is only useful as a backup.
 
 ```powershell
 # start_tunnel.vbs launches cloudflared hidden and writes tunnel.log / tunnel.err
@@ -127,17 +141,6 @@ Select-String -Path tunnel.err -Pattern "https://[a-z0-9-]+\.trycloudflare\.com"
 
 Example: `https://something-words.trycloudflare.com`. Anyone with that link
 can open the app from any device/browser.
-
-### Live deployment (permanent URL)
-
-Deployed on Render (free) — anyone can open it anywhere, anytime:
-
-**https://taskflow-kw0d.onrender.com**
-
-The app is deployed from the `main` branch via the `render.yaml` blueprint.
-`AUTO_SEED=1` creates the sample content on a fresh instance. Note: the free
-plan sleeps after ~15 minutes of inactivity (it wakes on the next request),
-and its filesystem is ephemeral — data resets on redeploys.
 
 > **Note:** the free quick-tunnel URL **changes every time** the tunnel
 > restarts (reboot). The Render URL above is permanent.
@@ -162,6 +165,29 @@ restart — read it from `tunnel.err`:
 Select-String -Path tunnel.err -Pattern "https://[a-z0-9-]+\.trycloudflare\.com"
 ```
 
+## Authentication & data isolation
+
+All data is private per scope — a registered user, a guest session, or the
+shared `anon` scope for raw unauthenticated API calls:
+
+- `POST /auth/signup` — `{"email"|"username"|"phone": "...", "password": "..."}`
+  → `201` + `token`. Login identifiers: email, username, phone, or numeric user id.
+- `POST /auth/login` — same body → `200` + `token` (HMAC-signed, 7-day TTL).
+- `GET /auth/me` — `Authorization: Bearer <token>` → the current profile.
+- `POST /auth/guest` — no body; creates a browser-scoped guest session and
+  clones the private sample content into it. Returns `{"guest_id": "...", ...}`.
+  The frontend sends it back as the `X-Guest-Id` header.
+- `POST /auth/forgot` — `{"identifier": "email-or-username"}` → returns a
+  `reset_token` in the JSON (this app has no email service, so the token is
+  shown directly on the screen).
+- `POST /auth/reset-password` — `{"token": "...", "new_password": "..."}` →
+  `200`; the token is single-use and expires after 15 minutes.
+- Every project/task is scoped to its owner (`owner_id` for users, or
+  `owner_guest_id` for guests/anon). Reading or writing another scope's data
+  returns `404`. The guest sample template is cloned once per new guest so
+  everyone starts with the same private example content and nobody can see
+  anyone else's data.
+
 ## Endpoint list
 
 ### Create — users
@@ -176,8 +202,10 @@ Select-String -Path tunnel.err -Pattern "https://[a-z0-9-]+\.trycloudflare\.com"
 ```
 
 ### Create — projects
-`POST /projects` — `owner_id` is optional; when omitted the first user owns
-the project (that is what the dashboard's "Add Project" form uses).
+`POST /projects` — `owner_id` is optional; when omitted the project is bound to
+the **current scope** (registered user via the token, guest via the `X-Guest-Id`
+header, or `anon` when neither is sent — that is what the dashboard's
+"Add Project" form uses).
 ```json
 // Request
 {"title": "Dark Store A"}
@@ -386,7 +414,7 @@ fully testable while still demonstrating the prompt design.
 - The dashboard also has a **light/dark mode toggle** (persisted in
   `localStorage`; the whole theme is driven by CSS custom properties and a
   `body.dark` class) and an **"Add Project" form** so projects can be created
-  from the UI without knowing any ids (`POST /projects` auto-assigns the
-  first user as owner).
+  from the UI without knowing any ids — the form submits without an id and the
+  project is bound to the current login/guest session.
 - The required repository should be a single public GitHub repo with a feature
   branch that was committed to at least twice and merged back into `main`.
