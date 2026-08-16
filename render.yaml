@@ -2,9 +2,10 @@ services:
   - type: web
     name: taskflow
     runtime: python
-    plan: free
+    pythonVersion: "3.12.7"
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
     envVars:
       - key: AUTO_SEED
         value: "1"
